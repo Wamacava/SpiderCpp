@@ -7,8 +7,9 @@ class CallBackTimer
 {
 public:
     CallBackTimer()
-    :_execute(false)
-    {}
+        : _execute(false)
+    {
+    }
 
     void start(int interval, std::function<void(void)> func)
     {
@@ -29,5 +30,5 @@ public:
     }
 
 private:
-    bool            _execute;
+    bool _execute;
 };

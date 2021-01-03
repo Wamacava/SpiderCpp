@@ -12,6 +12,7 @@ USERNAME="pi"
 OUTPUT="a.out"
 BINDIR="/home/pi/spider"
 
+set -e
 
 #../../tools/SysGCC/bin/arm-linux-gnueabihf-g++.exe *.cpp -o $OUTPUT
 

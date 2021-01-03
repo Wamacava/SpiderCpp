@@ -13,5 +13,4 @@ public:
     void sendData(const void * buffer, int length);
 
     void readData(void * buffer, int length);
-    // int getNum();
 };

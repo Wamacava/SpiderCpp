@@ -104,14 +104,7 @@ void ServoController::setServo(int servoId, int angle)
     }
 
     int max_angle = 180;
-    int off_time = round(m_pwm_servo_min + (m_pwm_servo_max - m_pwm_servo_min) * angle / max_angle ); 
-
-
-// TODO delete if
-    if(servoId == 1 || servoId == 0 || servoId == 2){
-    printf("### Servo: %d Angle: %d pulses: %d\n", servoId, angle,  off_time);
-    }
-    
+    int off_time = round(m_pwm_servo_min + (m_pwm_servo_max - m_pwm_servo_min) * angle / max_angle );     
 
     // ON start time of sevro will always be 0
     // Setting up only OFF time

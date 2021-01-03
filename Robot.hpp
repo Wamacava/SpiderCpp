@@ -31,11 +31,13 @@
                                                          ─▀▄▄▄▄▄▀─────▀▄▄▄▄▄▄▀
 
 */
-// #include <Servo.h>    //to define and control servos
-// #include <FlexiTimer2.h>//to set a timer to manage all servos
-// #include <Wire.h>
-// #include <Adafruit_SSD1306.h>
-// #include <Adafruit_GFX.h>
+
+/***********************************************************
+ * Modified to work with Raspberry Pi and PCA9685 module
+ * by Lukasz Kulas and Marta Opalinska
+ * Date 03/01/2021
+ ************************************************************/
+
 
 #include <math.h>
 #include <string>
@@ -48,26 +50,14 @@
 #include "ServoController.hpp"
 #include "CallBackTimer.hpp"
 
-
-
 class Robot
 {
 
     ServoController servoController;
     // Class to execute function periodically 
-    CallBackTimer callBackTimer;
+    CallBackTimer servo_service_executor;
 
     std::shared_mutex write_mutex;
-    // std::lock_guard<std::shared_mutex> lock(write);  // for writing
-    // std::shared_lock<std::shared_mutex> lock(write); // for reading
-
-
-    // OLED display TWI address
-    // #define OLED_ADDR   0x3C
-    // Adafruit_SSD1306 display(-1);
-    /* Servos --------------------------------------------------------------------*/
-    //define 12 servos for 4 legs
-    // Servo servo[4][3];
 
     //define servos' ports
     // Legs in array:
@@ -77,11 +67,11 @@ class Robot
     // 3 - rear left when looking from the top
 
     // Legs in array
-    // 0 - middle servo
-    // 1 - servo closest to the body
-    // 2 - the farthest servo
-
+    // 0 - the farthest servo
+    // 1 - middle servo
+    // 2 - servo closest to the body
     const int servo_pin[4][3] = {{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {9, 10, 11}}; /* Size of the robot ---------------------------------------------------------*/
+    
     const float length_a = 50;
     const float length_b = 77.1;
     const float length_c = 27.5;
@@ -133,7 +123,7 @@ class Robot
 public:
     Robot()
         : servoController(ServoController(0x40))
-        , callBackTimer(CallBackTimer())
+        , servo_service_executor(CallBackTimer())
     {
         usleep(10000);
         set_site(0, x_default - x_offset, y_start + y_step, z_boot);
@@ -144,39 +134,23 @@ public:
         {
             for (int j = 0; j < 3; j++)
             {
+                // second thread is not running yet, no need for mutexs
                 site_now[i][j] = site_expect[i][j];
             }
         }
-        //start servo service
-        // FlexiTimer2::set(20, servo_service); // TODO
-        // FlexiTimer2::start();
 
-        callBackTimer.start(20, std::bind(&Robot::servo_service, this));
+        //start servo service (updating servos every 20ms)
+        servo_service_executor.start(20, std::bind(&Robot::servo_service, this));
 
-
-
-        //initialize servos
-        //   servo_attach();
         stand();
-        //  delay(3000);
-        //  sit();
-        //  delay(3000);
-        //  stand();
-        //  delay(3000);
-        usleep(rand() % 500 + 500);
-        usleep(150);
-        // usleep(rand() % 2000 + 1000);
-        // usleep(150);
-        // usleep(rand() % 2000 + 1000);
 
-        // usleep(150);
-        // usleep(rand() % 2000 + 1000);
-        // usleep(150);
-        // usleep(rand() % 2000 + 1000);
-        // usleep(150);
-        // usleep(rand() % 500 + 500);
-        // usleep(150);
-        // usleep(rand() % 500 + 500);
+        usleep(rand() % 500 + 500);
+        usleep(500);
+
+    }
+
+    ~Robot(){
+        servo_service_executor.stop();
     }
 
     void forward()
@@ -203,72 +177,6 @@ public:
         turn_right(5);
     }
 
-    // void loop()
-    // {
-        // while (Serial.available()) // While serial data are available we store it
-        // {
-            // delay(10);
-            // SerialData = Serial.read();
-            // if (SerialData == 'b')
-            //     LedR = Serial.parseInt();
-            // else if (SerialData == 'g')
-            //     LedG = Serial.parseInt();
-            // else if (SerialData == 'r')
-            //     LedB = Serial.parseInt();
-            // else
-            //     data += SerialData;
-        // }
-        // if (data == "f") // If the stored data is forward movement
-        // {
-        //     usleep(150);
-        //     step_forward(1);
-        // }
-
-        // if (data == "p") // If the stored data is backward movement
-        // {
-        //     usleep(150);
-        //     step_back(1);
-        // }
-
-        // if (data == "l") // If the stored data is to turn left the car
-        // {
-        //     usleep(150);
-        //     turn_left(1);
-        // }
-
-        // if (data == "m") // If the stored data is to turn right the car
-        // {
-        //     usleep(150);
-        //     turn_right(5);
-        // }
-        // data = "";
-        // analogWrite(lightR, LedR);
-        // analogWrite(lightG, LedG);
-        // analogWrite(lightB, LedB);
-    // }
-    // void servo_attach(void)
-    // {
-    //   for (int i = 0; i < 4; i++)
-    //   {
-    //     for (int j = 0; j < 3; j++)
-    //     {
-    //       servo[i][j].attach(servo_pin[i][j]);
-    //       delay(100);
-    //     }
-    //   }
-    // }
-
-    // void servo_detach(void)
-    // {
-    //   for (int i = 0; i < 4; i++)
-    //   {
-    //     for (int j = 0; j < 3; j++)
-    //     {
-    //       servo[i][j].detach();
-    //       delay(100);
-    //     }
-    //   }
-    // }
 
 private:
     void sit(void)
@@ -305,8 +213,7 @@ private:
         move_speed = spot_turn_speed;
         while (step-- > 0)
         {
-
-            if (site_now[3][1] == y_start)
+            if (readSiteNow(3, 1) == y_start)
             {
                 //leg 3&1 move
                 set_site(3, x_default + x_offset, y_start, z_up);
@@ -385,7 +292,7 @@ private:
         move_speed = spot_turn_speed;
         while (step-- > 0)
         {
-            if (site_now[2][1] == y_start)
+            if (readSiteNow(2,1) == y_start)
             {
                 //leg 2&0 move
                 set_site(2, x_default + x_offset, y_start, z_up);
@@ -459,12 +366,13 @@ private:
   - blocking function
   - parameter step steps wanted to go
    ---------------------------------------------------------------------------*/
+    
     void step_forward(unsigned int step)
     {
         move_speed = leg_move_speed;
         while (step-- > 0)
         {
-            if (site_now[2][1] == y_start)
+            if (readSiteNow(2, 1) == y_start)
             {
                 //leg 2&1 move
                 set_site(2, x_default + x_offset, y_start, z_up);
@@ -531,7 +439,7 @@ private:
         move_speed = leg_move_speed;
         while (step-- > 0)
         {
-            if (site_now[3][1] == y_start)
+            if (readSiteNow(3,1) == y_start)
             {
                 //leg 3&0 move
                 set_site(3, x_default + x_offset, y_start, z_up);
@@ -592,19 +500,19 @@ private:
 
     void body_left(int i)
     {
-        set_site(0, site_now[0][0] + i, KEEP, KEEP);
-        set_site(1, site_now[1][0] + i, KEEP, KEEP);
-        set_site(2, site_now[2][0] - i, KEEP, KEEP);
-        set_site(3, site_now[3][0] - i, KEEP, KEEP);
+        set_site(0, readSiteNow(0,0) + i, KEEP, KEEP);
+        set_site(1, readSiteNow(1,0) + i, KEEP, KEEP);
+        set_site(2, readSiteNow(2,0) - i, KEEP, KEEP);
+        set_site(3, readSiteNow(3,0) - i, KEEP, KEEP);
         wait_all_reach();
     }
 
     void body_right(int i)
     {
-        set_site(0, site_now[0][0] - i, KEEP, KEEP);
-        set_site(1, site_now[1][0] - i, KEEP, KEEP);
-        set_site(2, site_now[2][0] + i, KEEP, KEEP);
-        set_site(3, site_now[3][0] + i, KEEP, KEEP);
+        set_site(0, readSiteNow(0,0) - i, KEEP, KEEP);
+        set_site(1, readSiteNow(1,0) - i, KEEP, KEEP);
+        set_site(2, readSiteNow(2,0) + i, KEEP, KEEP);
+        set_site(3, readSiteNow(3,0) + i, KEEP, KEEP);
         wait_all_reach();
     }
 
@@ -614,12 +522,12 @@ private:
         float y_tmp;
         float z_tmp;
         move_speed = 1;
-        if (site_now[3][1] == y_start)
+        if (readSiteNow(3,1) == y_start)
         {
             body_right(15);
-            x_tmp = site_now[2][0];
-            y_tmp = site_now[2][1];
-            z_tmp = site_now[2][2];
+            x_tmp = readSiteNow(2,0);
+            y_tmp = readSiteNow(2,1);
+            z_tmp = readSiteNow(2,2);
             move_speed = body_move_speed;
             for (int j = 0; j < i; j++)
             {
@@ -636,9 +544,9 @@ private:
         else
         {
             body_left(15);
-            x_tmp = site_now[0][0];
-            y_tmp = site_now[0][1];
-            z_tmp = site_now[0][2];
+            x_tmp = readSiteNow(0,0);
+            y_tmp = readSiteNow(0,1);
+            z_tmp = readSiteNow(0,2);
             move_speed = body_move_speed;
             for (int j = 0; j < i; j++)
             {
@@ -660,12 +568,12 @@ private:
         float y_tmp;
         float z_tmp;
         move_speed = 1;
-        if (site_now[3][1] == y_start)
+        if (readSiteNow(3,1) == y_start)
         {
             body_right(15);
-            x_tmp = site_now[2][0];
-            y_tmp = site_now[2][1];
-            z_tmp = site_now[2][2];
+            x_tmp = readSiteNow(2,0);
+            y_tmp = readSiteNow(2,1);
+            z_tmp = readSiteNow(2,2);
             move_speed = body_move_speed;
             for (int j = 0; j < i; j++)
             {
@@ -682,9 +590,9 @@ private:
         else
         {
             body_left(15);
-            x_tmp = site_now[0][0];
-            y_tmp = site_now[0][1];
-            z_tmp = site_now[0][2];
+            x_tmp = readSiteNow(0,0);
+            y_tmp = readSiteNow(0,1);
+            z_tmp = readSiteNow(0,2);
             move_speed = body_move_speed;
             for (int j = 0; j < i; j++)
             {
@@ -702,19 +610,19 @@ private:
 
     void head_up(int i)
     {
-        set_site(0, KEEP, KEEP, site_now[0][2] - i);
-        set_site(1, KEEP, KEEP, site_now[1][2] + i);
-        set_site(2, KEEP, KEEP, site_now[2][2] - i);
-        set_site(3, KEEP, KEEP, site_now[3][2] + i);
+        set_site(0, KEEP, KEEP, readSiteNow(0,2) - i);
+        set_site(1, KEEP, KEEP, readSiteNow(1,2) + i);
+        set_site(2, KEEP, KEEP, readSiteNow(2,2) - i);
+        set_site(3, KEEP, KEEP, readSiteNow(3,2) + i);
         wait_all_reach();
     }
 
     void head_down(int i)
     {
-        set_site(0, KEEP, KEEP, site_now[0][2] + i);
-        set_site(1, KEEP, KEEP, site_now[1][2] - i);
-        set_site(2, KEEP, KEEP, site_now[2][2] + i);
-        set_site(3, KEEP, KEEP, site_now[3][2] - i);
+        set_site(0, KEEP, KEEP, readSiteNow(0,2) + i);
+        set_site(1, KEEP, KEEP, readSiteNow(1,2) - i);
+        set_site(2, KEEP, KEEP, readSiteNow(2,2) + i);
+        set_site(3, KEEP, KEEP, readSiteNow(3,2) - i);
         wait_all_reach();
     }
 
@@ -768,6 +676,8 @@ private:
    ---------------------------------------------------------------------------*/
     void servo_service(void)
     {
+        std::lock_guard<std::shared_mutex> lock(write_mutex);
+
         //   sei();
         static float alpha, beta, gamma;
 
@@ -795,6 +705,7 @@ private:
    ---------------------------------------------------------------------------*/
     void set_site(int leg, float x, float y, float z)
     {
+        std::lock_guard<std::shared_mutex> lock(write_mutex);
         float length_x = 0, length_y = 0, length_z = 0;
 
         if (x != KEEP)
@@ -825,10 +736,18 @@ private:
     void wait_reach(int leg)
     {
         while (1)
-            if (site_now[leg][0] == site_expect[leg][0])
-                if (site_now[leg][1] == site_expect[leg][1])
-                    if (site_now[leg][2] == site_expect[leg][2])
-                        break;
+        {
+            
+            {
+                std::shared_lock<std::shared_mutex> lock(write_mutex);
+                if (site_now[leg][0] == site_expect[leg][0])
+                    if (site_now[leg][1] == site_expect[leg][1])
+                        if (site_now[leg][2] == site_expect[leg][2])
+                            break;
+            }
+            usleep(10);
+            
+        }
     }
 
     /*
@@ -892,13 +811,21 @@ private:
             beta = beta;
             gamma += 90;
         }
-        // servo[leg][0].write(alpha); // TODO change for funcitons from ServoController
-        // servo[leg][1].write(beta);
-        // servo[leg][2].write(gamma);
 
         servoController.setServo(servo_pin[leg][0], alpha);
-        servoController.setServo(servo_pin[leg][0], beta);
-        servoController.setServo(servo_pin[leg][0], gamma);
+        servoController.setServo(servo_pin[leg][1], beta);
+        servoController.setServo(servo_pin[leg][2], gamma);
     }
 
+    float readSiteNow(int x, int y)
+    {
+        std::shared_lock<std::shared_mutex> lock(write_mutex);
+        return site_now[x][y];
+    }
+
+    void writeSiteNow(int x, int y, float val)
+    {
+        std::lock_guard<std::shared_mutex> lock(write_mutex);
+        site_now[x][y] = val;
+    }
 };
